@@ -16,19 +16,18 @@ def login():
     try:
         email = request.json.get('email')
         password = request.json.get('password')
-        query = f"(select * from users where email='{email}' and password='{password}');"
         if not all((email, password)):
             return jsonify({
                     'status': 'error',
                     'message': 'Both email and password are required!'
             }), 400
-        user = db.engine.execute(query).first()
+        user = Users.query.filter_by(email=email, password=password).first()
         if user:
             session["email"] = email
-            session["user_id"] = user[0]
+            session["user_id"] = user.id
             return jsonify({
                 "status": "success",
-                "id": user[0]
+                "id": user.id
             }), 200
         else:
             return jsonify({
@@ -84,8 +83,7 @@ def add_address():
 def create_order():
     try:
         user_email = session.get("email")
-        user_query = f"select * from users where email='{user_email}';"
-        user = db.engine.execute(user_query).first()
+        user = Users.query.filter_by(email=user_email).first()
         product_id = request.json.get("product_id")
         address_id = request.json.get("address_id")
         amount = request.json.get("amount")
@@ -108,11 +106,16 @@ def submit_help():
     attachment = request.files.get("attachment")
     if attachment:
         filename = secure_filename(attachment.filename)
+        extension = filename.split(".")[1]
+        if extension.lower() not in [".png", ".jpg", ".jpeg", ".gif"]:
+            return jsonify({
+                "status": "error",
+                "message": "Invalid file!"
+            }), 400
         attachment.save(os.path.join(UPLOAD_FOLDER, filename))
     user_email = session.get("email")
-    user_query = f"select * from users where email='{user_email}';"
-    user = db.engine.execute(user_query).first()
-    Tickets.create(user["id"], title, description, filename)
+    user = Users.query.filter_by(email=user_email).first()
+    Tickets.create(user.id, title, description, filename)
     return jsonify(
             {
                 "status": "success",
@@ -127,9 +130,8 @@ def download(filename):
 def search_order():
     order_id = request.args.get("order_id")
     user_email = session.get("email")
-    user_query = f"select * from users where email='{user_email}';"
-    user = db.engine.execute(user_query).first()
-    order_query = f"(select p.image, p.name, o.amount from products p right join orders o on o.user_id={user['id']} and p.id=o.product_id and o.id={order_id});"
+    user = Users.query.filter_by(email=user_email).first()
+    order_query = f"(select p.image, p.name, o.amount from products p right join orders o on o.user_id={user.id} and p.id=o.product_id and o.id={order_id});"
     order = db.engine.execute(order_query).all()
     orders = []
     for order_obj in order:
